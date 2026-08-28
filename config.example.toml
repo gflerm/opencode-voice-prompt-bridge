@@ -1,0 +1,28 @@
+# OpenCode Voice Prompt Bridge - example configuration
+# Copy to config.toml and adjust. config.toml is gitignored.
+
+[hotkey]
+# pynput key name for push-to-talk (GlobalHotkey listens for press/release)
+key = "caps_lock"
+# ignore taps shorter than this many milliseconds (accidental press)
+min_duration_ms = 200
+
+[audio]
+# Input device index; null = system default. Run scripts/check_env.py to list.
+device = 1
+sample_rate = 16000
+channels = 1
+block_ms = 30
+
+[whisper]
+# Model size: small.en | medium.en | distil-large-v3 | large-v3
+model = "small.en"
+# "auto" | "cuda" | "cpu"
+device = "auto"
+# "auto" | "float16" | "bfloat16" | "int8_float16" | "int8" | "float32"
+compute_type = "auto"
+language = "en"
+
+[benchmark]
+# Directory of WAV files used by scripts/benchmark_whisper.py
+corpus_dir = "data/corpus"

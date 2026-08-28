@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# Local data (databases, corpus, recordings)
+data/
+*.wav
+*.db
+
+# Packaging / builds
+build/
+dist/
+*.spec
+
+# Environment / secrets
+config.toml
+.env
+
+# OS
+Thumbs.db
+Desktop.ini
