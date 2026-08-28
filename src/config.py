@@ -44,6 +44,7 @@ class OpencodeConfig:
     mode: str = "run"  # "run" | "attach"
     attach_server: str = ""
     show_console: bool = True
+    keep_open: bool = True
     working_dir: str = ""
 
 

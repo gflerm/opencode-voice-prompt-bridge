@@ -44,6 +44,11 @@ def _console_flags(config: OpencodeConfig) -> int:
     return 0
 
 
+def _wrap_keep_open(args: list[str]) -> list[str]:
+    """Wrap in `cmd /k` so the console survives after opencode exits."""
+    return ["cmd.exe", "/k", *args]
+
+
 def send(config: OpencodeConfig, prompt: str, wait: bool = False) -> subprocess.Popen | int:
     """Launch the OpenCode handoff.
 
@@ -57,6 +62,8 @@ def send(config: OpencodeConfig, prompt: str, wait: bool = False) -> subprocess.
         # cmd.exe shims cannot carry newlines in arguments.
         args[-1] = " ".join(args[-1].split())
     flags = _console_flags(config)
+    if sys.platform == "win32" and config.show_console and config.keep_open:
+        args = _wrap_keep_open(args)
     try:
         if wait:
             completed = subprocess.run(

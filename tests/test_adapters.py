@@ -13,7 +13,10 @@ from config import OpencodeConfig
 
 
 def make_config(**overrides) -> OpencodeConfig:
-    values = dict(command="opencode", mode="run", attach_server="", show_console=False, working_dir="")
+    values = dict(
+        command="opencode", mode="run", attach_server="",
+        show_console=False, keep_open=False, working_dir="",
+    )
     values.update(overrides)
     return OpencodeConfig(**values)
 
@@ -119,3 +122,19 @@ def test_send_unresolvable_executable(monkeypatch):
     monkeypatch.setattr(adapter.shutil, "which", lambda name: None)
     with pytest.raises(adapter.AdapterError, match="not found on PATH"):
         adapter.send(make_config(), "hello")
+
+
+def test_send_keep_open_wraps_in_cmd_k(monkeypatch):
+    captured = {}
+
+    def fake_popen(args, **kwargs):
+        captured["args"] = args
+        return "proc"
+
+    monkeypatch.setattr(adapter.shutil, "which", lambda name: f"C:/tools/{name}.CMD")
+    monkeypatch.setattr(adapter.subprocess, "Popen", fake_popen)
+    adapter.send(make_config(show_console=True, keep_open=True), "hello")
+    assert captured["args"][0] == "cmd.exe"
+    assert captured["args"][1] == "/k"
+    assert captured["args"][2] == "C:/tools/opencode.CMD"
+    assert captured["args"][-1] == "hello"

@@ -42,5 +42,8 @@ command = "opencode"
 mode = "run"
 attach_server = ""
 show_console = true
+# Keep the spawned console open after `opencode run` finishes (cmd /k)
+# so the reply stays readable. false = window closes when done.
+keep_open = true
 # Optional working directory for the spawned process; empty = inherit.
 working_dir = ""
