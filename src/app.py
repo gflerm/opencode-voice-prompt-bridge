@@ -21,6 +21,7 @@ from adapters import opencode as oc_adapter
 from adapters import tui as tui_adapter
 from adaptation import AdaptationEngine
 from audio import Recorder
+from bridge_server import VoiceBridgeServer
 from config import REPO_ROOT, load_config
 from hotkeys import GlobalHotkey
 from storage import AdaptationStore, seed_glossary
@@ -42,6 +43,9 @@ class App:
         self.target_hwnd = 0
         self.last_inference_s = 0.0
         self.last_payload: ReviewPayload | None = None
+        self.bridge: VoiceBridgeServer | None = None
+        self._native_pending = None
+        self._native_event_id = 0
 
         db_path = Path(self.config.adaptation.db_path)
         if not db_path.is_absolute():
@@ -51,6 +55,11 @@ class App:
         if seeded:
             print(f"[adapt] seeded glossary with {seeded} terms")
         self.engine = AdaptationEngine(self.store)
+
+        if self.config.opencode.mode == "native":
+            self.bridge = VoiceBridgeServer(self.config.opencode.native_port)
+            self.bridge.start()
+            print(f"[native] bridge listening on 127.0.0.1:{self.bridge.port}")
 
         print(f"Loading {self.config.whisper.model}...")
         self.transcriber.load()
@@ -85,6 +94,8 @@ class App:
         self.target_hwnd = tui_adapter.capture_foreground()
         try:
             self.recorder.start()
+            if self.bridge is not None:
+                self.bridge.state.set_status("recording")
             print("[rec] recording...")
         except Exception as exc:
             print(f"[rec] FAILED to start: {exc}")
@@ -95,6 +106,8 @@ class App:
         except Exception as exc:
             print(f"[rec] stop failed: {exc}")
             return
+        if self.bridge is not None:
+            self.bridge.state.set_status("transcribing")
         if audio.size == 0:
             print("[app] empty capture - ignored")
             return
@@ -147,6 +160,11 @@ class App:
                         press_enter=self.config.opencode.auto_enter,
                         input_method=self.config.opencode.input_method,
                     )
+                elif self.config.opencode.mode == "native":
+                    # Fallback path when the plugin never picked the text up.
+                    tui_adapter.send_to_window(
+                        self.target_hwnd, text, press_enter=False, input_method="type"
+                    )
                 else:
                     oc_adapter.send(self.config.opencode, text)
                 self.events.put((UI_EVENT_SEND_OK, text))
@@ -169,7 +187,11 @@ class App:
                     self.last_inference_s = result.inference_s
                     note = " (adapted)" if review_payload.text != review_payload.original else ""
                     print(f"[app] transcript ready ({result.inference_s:.2f}s){note}")
-                    if self.config.opencode.direct_send:
+                    if self.bridge is not None:
+                        self._native_event_id = self.bridge.state.publish_transcript(review_payload.text)
+                        self._native_pending = (review_payload, time.time())
+                        print(f"[native] transcript published (id {self._native_event_id}) - waiting for OpenCode plugin")
+                    elif self.config.opencode.direct_send:
                         print("[direct] sending straight to target (review skipped)")
                         self._dispatch_send(review_payload.text, [])
                     else:
@@ -185,6 +207,16 @@ class App:
                     self.review.send_failed(payload)
         except queue.Empty:
             pass
+        if self.bridge is not None and self._native_pending is not None:
+            pending_payload, published_at = self._native_pending
+            fetched = self.bridge.state.fetches_for(self._native_event_id)
+            if fetched > 0:
+                self._native_pending = None
+                print("[native] delivered via OpenCode plugin")
+            elif time.time() - published_at > 6.0:
+                print("[native] plugin did not fetch - opening review window")
+                self.review.present(pending_payload)
+                self._native_pending = None
         self.root.after(80, self._poll_events)
 
     def run(self) -> int:
@@ -194,7 +226,9 @@ class App:
             print("WARNING: key suppression unavailable - hotkey may leak to other apps")
         key = self.config.hotkey.key.upper()
         mode = self.config.opencode.mode
-        if mode == "tui":
+        if mode == "native":
+            target_note = "text is appended into the OpenCode prompt by the companion plugin - review there and press Enter"
+        elif mode == "tui":
             target_note = "text will be pasted into the window focused when you start recording"
         else:
             target_note = f"prompts spawn: {self.config.opencode.command} {self.config.opencode.mode}"
@@ -210,6 +244,8 @@ class App:
             self.hotkey.stop()
             self.bypass_hotkey.stop()
             self.transcribe_jobs.put(None)
+            if self.bridge is not None:
+                self.bridge.stop()
             self.store.close()
             print("stopped")
         return 0

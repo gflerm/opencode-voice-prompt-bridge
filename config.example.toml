@@ -35,10 +35,11 @@ corpus_dir = "data/corpus"
 
 [opencode]
 # How the final prompt reaches OpenCode (FR-04).
-#   "run"  = spawn `opencode run <prompt>` in a new console (one-shot)
+#   "run"    = spawn `opencode run <prompt>` in a new console (one-shot)
 #   "attach" = `opencode run --attach <server> <prompt>` (needs attach_server)
-#   "tui"  = paste into the window that had focus when recording started
-#            (lands in your live OpenCode TUI session; works with any app)
+#   "tui"    = inject keystrokes/paste into the window focused at record start
+#   "native" = companion OpenCode plugin appends text into the live TUI
+#              prompt via its own API (run scripts/install_plugin.py once)
 command = "opencode"
 mode = "tui"
 attach_server = ""
@@ -60,6 +61,8 @@ auto_enter = true
 # "type"  = types the text keystroke-by-keystroke so it appears as
 # normal editable inline text (clipboard untouched).
 input_method = "paste"
+# Native mode: local port the companion plugin polls for dictations.
+native_port = 8765
 # Opt-in only (spec section 18): skip the review window and send each
 # dictation as soon as the key is released. If the send fails, the
 # review window opens with the text so nothing is lost.

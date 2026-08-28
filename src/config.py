@@ -41,11 +41,13 @@ class BenchmarkConfig:
 @dataclass(frozen=True)
 class OpencodeConfig:
     command: str = "opencode"
-    mode: str = "run"  # "run" | "attach" | "tui"
+    mode: str = "run"  # "run" | "attach" | "tui" | "native"
     attach_server: str = ""
     show_console: bool = True
     keep_open: bool = True
     working_dir: str = ""
+    # Native mode: local port the companion plugin polls for dictations.
+    native_port: int = 8765
     # Opt-in only (spec section 18): skip the review window and send on
     # key release. On send failure the review window opens as fallback.
     direct_send: bool = False
