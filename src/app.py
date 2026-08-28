@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import numpy as np
 
 from adapters import opencode as oc_adapter
+from adapters import tui as tui_adapter
 from audio import Recorder
 from config import load_config
 from hotkeys import GlobalHotkey
@@ -37,6 +38,7 @@ class App:
         self.transcriber = Transcriber(self.config.whisper)
         self.events: queue.Queue = queue.Queue()
         self.transcribe_jobs: queue.Queue = queue.Queue()
+        self.target_hwnd = 0
 
         print(f"Loading {self.config.whisper.model}...")
         self.transcriber.load()
@@ -59,6 +61,7 @@ class App:
         self.worker.start()
 
     def _on_record_start(self) -> None:
+        self.target_hwnd = tui_adapter.capture_foreground()
         try:
             self.recorder.start()
             print("[rec] recording...")
@@ -94,9 +97,12 @@ class App:
     def _dispatch_send(self, text: str) -> None:
         def job() -> None:
             try:
-                oc_adapter.send(self.config.opencode, text)
+                if self.config.opencode.mode == "tui":
+                    tui_adapter.send_to_window(self.target_hwnd, text)
+                else:
+                    oc_adapter.send(self.config.opencode, text)
                 self.events.put((UI_EVENT_SEND_OK, text))
-            except oc_adapter.AdapterError as exc:
+            except Exception as exc:
                 self.events.put((UI_EVENT_SEND_FAIL, str(exc)))
 
         threading.Thread(target=job, daemon=True).start()
@@ -121,7 +127,13 @@ class App:
     def run(self) -> int:
         self.hotkey.start()
         key = self.config.hotkey.key.upper()
-        print(f"Push-to-talk: hold {key} and speak. Esc in review cancels. Ctrl+C quits.\n")
+        mode = self.config.opencode.mode
+        if mode == "tui":
+            target_note = "text will be pasted into the window focused when you start recording"
+        else:
+            target_note = f"prompts spawn: {self.config.opencode.command} {self.config.opencode.mode}"
+        print(f"Push-to-talk: hold {key} and speak. Esc in review cancels. Ctrl+C quits.")
+        print(f"Target ({mode}): {target_note}\n")
         self.root.after(80, self._poll_events)
         try:
             self.root.mainloop()

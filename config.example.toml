@@ -34,16 +34,18 @@ language = "en"
 corpus_dir = "data/corpus"
 
 [opencode]
-# How the final prompt reaches OpenCode (FR-04). Argument arrays only,
-# never a shell string.
+# How the final prompt reaches OpenCode (FR-04).
+#   "run"  = spawn `opencode run <prompt>` in a new console (one-shot)
+#   "attach" = `opencode run --attach <server> <prompt>` (needs attach_server)
+#   "tui"  = paste into the window that had focus when recording started
+#            (lands in your live OpenCode TUI session; works with any app)
 command = "opencode"
-# "run"  = spawn `opencode run <prompt>` (new console window when show_console)
-# "attach" = `opencode run --attach <server> <prompt>` (needs attach_server)
-mode = "run"
+mode = "tui"
 attach_server = ""
 show_console = true
 # Keep the spawned console open after `opencode run` finishes (cmd /k)
 # so the reply stays readable. false = window closes when done.
+# (only applies to run/attach modes)
 keep_open = true
 # Optional working directory for the spawned process; empty = inherit.
 working_dir = ""
