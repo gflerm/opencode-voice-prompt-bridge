@@ -21,7 +21,7 @@ from adapters import opencode as oc_adapter
 from adapters import tui as tui_adapter
 from adaptation import AdaptationEngine
 from audio import Recorder
-from bridge_server import VoiceBridgeServer
+from bridge_server import VoiceBridgeServer, bridge_port_in_use
 from config import REPO_ROOT, load_config
 from hotkeys import GlobalHotkey
 from storage import AdaptationStore, seed_glossary
@@ -58,6 +58,12 @@ class App:
         self.engine = AdaptationEngine(self.store)
 
         if self.config.opencode.mode == "native":
+            if bridge_port_in_use(self.config.opencode.native_port):
+                print(
+                    f"[native] port {self.config.opencode.native_port} already serving - "
+                    "another voice app instance is running; exiting"
+                )
+                raise SystemExit(1)
             self.bridge = VoiceBridgeServer(self.config.opencode.native_port)
             self.bridge.start()
             print(f"[native] bridge listening on 127.0.0.1:{self.bridge.port}")

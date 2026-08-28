@@ -57,6 +57,23 @@ class VoiceBridgeState:
             return self._fetches
 
 
+def bridge_port_in_use(port: int) -> bool:
+    """True when something already listens on the bridge port."""
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.3)
+        return s.connect_ex(("127.0.0.1", port)) == 0
+
+
+class _BridgeServer(ThreadingHTTPServer):
+    # Windows lets a second socket bind the same port when SO_REUSEADDR
+    # is on (ThreadingHTTPServer's default), splitting polls and
+    # publishes across instances. Exclusive binds make duplicates fail
+    # loudly instead of silently half-working.
+    allow_reuse_address = False
+
+
 def _make_handler(state: VoiceBridgeState):
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:  # noqa: N802
@@ -94,7 +111,7 @@ class VoiceBridgeServer:
     def start(self) -> None:
         if self._server is not None:
             return
-        self._server = ThreadingHTTPServer(("127.0.0.1", self._port), _make_handler(self.state))
+        self._server = _BridgeServer(("127.0.0.1", self._port), _make_handler(self.state))
         self._port = self._server.server_address[1]
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
         self._thread.start()
