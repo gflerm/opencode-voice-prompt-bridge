@@ -70,7 +70,13 @@ class PushToTalkStateMachine:
 
     def press(self) -> None:
         if self._pressed_at is not None:
-            return
+            # A genuine hold keeps emitting repeat key-downs, so the gap
+            # stays small. A huge gap means a key-up was missed (stuck
+            # state) - reset and accept this press instead of wedging.
+            if self._clock() - self._pressed_at > 10.0:
+                self._pressed_at = None
+            else:
+                return
         self._pressed_at = self._clock()
         if self._on_start is not None:
             self._on_start()

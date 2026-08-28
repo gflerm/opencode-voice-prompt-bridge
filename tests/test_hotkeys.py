@@ -270,3 +270,23 @@ def test_caps_guard_noop_when_state_unchanged(monkeypatch):
     hk._handle_raw(WM_KEYDOWN, 0x14)
     hk._handle_raw(WM_KEYUP, 0x14)
     assert taps == []
+
+def test_stale_press_resets_instead_of_wedging():
+    from hotkeys import HotkeyConfig, PushToTalkStateMachine
+
+    clock = {"t": 0.0}
+    starts, stops = [], []
+    sm = PushToTalkStateMachine(
+        HotkeyConfig(key="caps_lock"),
+        on_start=lambda: starts.append(1),
+        on_stop=lambda d: stops.append(d),
+        clock=lambda: clock["t"],
+    )
+    sm.press()
+    clock["t"] = 30.0          # key-up was missed; 30s stale
+    sm.press()                 # next physical press must self-heal
+    assert len(starts) == 2
+    clock["t"] = 30.5
+    sm.release()
+    assert len(stops) == 1
+    assert not sm.is_pressed
