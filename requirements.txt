@@ -4,6 +4,8 @@ faster-whisper==1.2.1
 numpy==2.5.2
 sounddevice==0.5.6
 pynput==1.8.2
+pycaw==20251023
+comtypes==1.4.16
 pytest==9.1.1
 
 # CUDA runtime DLLs for CTranslate2 GPU path (RTX 5070 / Blackwell needs >=12.8)

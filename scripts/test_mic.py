@@ -1,12 +1,16 @@
-"""Manual mic test: record until Enter, then report stats.
+"""Manual mic test: record until Enter (or --seconds N), then report stats.
 
-Usage: .venv\\Scripts\\python.exe scripts\\test_mic.py [output.wav]
+Usage:
+  .venv\\Scripts\\python.exe scripts\\test_mic.py [output.wav]
+  .venv\\Scripts\\python.exe scripts\\test_mic.py output.wav --seconds 10
 Privacy: audio only stays in memory unless you pass an output path.
 """
 
 from __future__ import annotations
 
+import argparse
 import sys
+import time
 import wave
 from pathlib import Path
 
@@ -17,6 +21,16 @@ import numpy as np
 
 from audio import Recorder, list_input_devices
 from config import load_config
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Record a test clip from the microphone.")
+    parser.add_argument("output", nargs="?", help="optional .wav path to save the recording")
+    parser.add_argument(
+        "--seconds", type=float, default=None,
+        help="record for a fixed duration instead of waiting for Enter",
+    )
+    return parser.parse_args()
 
 
 def save_wav(path: Path, audio: np.ndarray, sample_rate: int) -> None:
@@ -30,6 +44,7 @@ def save_wav(path: Path, audio: np.ndarray, sample_rate: int) -> None:
 
 
 def main() -> int:
+    args = parse_args()
     config = load_config()
     print("Input devices:")
     for idx, name in list_input_devices():
@@ -37,20 +52,31 @@ def main() -> int:
         print(f"  [{idx}] {name}{marker}")
 
     recorder = Recorder(config.audio)
-    input("\nPress Enter to START recording...")
-    recorder.start()
-    input("Recording... press Enter to STOP")
+    if args.seconds is not None:
+        print(f"\nRecording starts in 3... ", end="", flush=True)
+        for n in (2, 1):
+            time.sleep(1)
+            print(f"{n}... ", end="", flush=True)
+        time.sleep(1)
+        print("SPEAK NOW!")
+        recorder.start()
+        time.sleep(args.seconds)
+    else:
+        input("\nPress Enter to START recording...")
+        recorder.start()
+        input("Recording... press Enter to STOP")
     audio = recorder.stop()
 
     duration = audio.size / config.audio.sample_rate
     peak = float(np.max(np.abs(audio))) if audio.size else 0.0
-    print(f"\nCaptured {duration:.2f}s  peak={peak:.3f}")
+    rms = float(np.sqrt(np.mean(np.square(audio)))) if audio.size else 0.0
+    print(f"\nCaptured {duration:.2f}s  peak={peak:.3f}  rms={rms:.3f}")
     if peak < 0.01:
         print("WARNING: near-silence captured - check the configured device index")
         return 1
 
-    if len(sys.argv) > 1:
-        out = Path(sys.argv[1])
+    if args.output:
+        out = Path(args.output)
         out.parent.mkdir(parents=True, exist_ok=True)
         save_wav(out, audio, config.audio.sample_rate)
         print(f"Saved: {out}")

@@ -22,6 +22,7 @@ class AudioConfig:
     sample_rate: int = 16000
     channels: int = 1
     block_ms: int = 30
+    gain: float = 1.0
 
 
 @dataclass(frozen=True)

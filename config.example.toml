@@ -13,6 +13,9 @@ device = 1
 sample_rate = 16000
 channels = 1
 block_ms = 30
+# Software multiplier applied after capture (clipped to [-1, 1]).
+# Keep 1.0 unless transcripts come back empty; lower if peak nears 1.0.
+gain = 1.0
 
 [whisper]
 # Model size: small.en | medium.en | distil-large-v3 | large-v3

@@ -41,8 +41,11 @@ class Recorder:
     def _callback(self, indata, frames, time_info, status) -> None:  # noqa: ANN001
         if status:
             print(f"[audio] stream status: {status}")
+        frame = indata.copy()
+        if self._config.gain != 1.0:
+            frame = np.clip(frame * self._config.gain, -1.0, 1.0)
         with self._lock:
-            self._frames.append(indata.copy())
+            self._frames.append(frame)
             self._samples_captured += frames
 
     def start(self) -> None:
