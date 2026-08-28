@@ -50,10 +50,11 @@ def test_send_wait_success(monkeypatch):
         calls["args"] = args
         return type("R", (), {"returncode": 0, "stderr": ""})()
 
+    monkeypatch.setattr(adapter.shutil, "which", lambda name: f"C:/tools/{name}.CMD")
     monkeypatch.setattr(adapter.subprocess, "run", fake_run)
     code = adapter.send(make_config(), "hello", wait=True)
     assert code == 0
-    assert calls["args"] == ["opencode", "run", "hello"]
+    assert calls["args"] == ["C:/tools/opencode.CMD", "run", "hello"]
 
 
 def test_send_wait_nonzero_raises(monkeypatch):
@@ -81,7 +82,40 @@ def test_send_fire_and_forget(monkeypatch):
         captured["args"] = args
         return "fake-process"
 
+    monkeypatch.setattr(adapter.shutil, "which", lambda name: f"C:/tools/{name}.CMD")
     monkeypatch.setattr(adapter.subprocess, "Popen", fake_popen)
     result = adapter.send(make_config(), "dictated prompt")
     assert result == "fake-process"
-    assert captured["args"] == ["opencode", "run", "dictated prompt"]
+    assert captured["args"] == ["C:/tools/opencode.CMD", "run", "dictated prompt"]
+
+
+def test_send_resolves_executable_via_which(monkeypatch):
+    captured = {}
+
+    def fake_popen(args, **kwargs):
+        captured["args"] = args
+        return "proc"
+
+    monkeypatch.setattr(adapter.shutil, "which", lambda name: f"C:/tools/{name}.CMD")
+    monkeypatch.setattr(adapter.subprocess, "Popen", fake_popen)
+    adapter.send(make_config(), "hello")
+    assert captured["args"][0] == "C:/tools/opencode.CMD"
+
+
+def test_send_resolved_cmd_shim_flattens_newlines(monkeypatch):
+    captured = {}
+
+    def fake_popen(args, **kwargs):
+        captured["args"] = args
+        return "proc"
+
+    monkeypatch.setattr(adapter.shutil, "which", lambda name: "C:/tools/opencode.cmd")
+    monkeypatch.setattr(adapter.subprocess, "Popen", fake_popen)
+    adapter.send(make_config(), "line one\nline two")
+    assert captured["args"][-1] == "line one line two"
+
+
+def test_send_unresolvable_executable(monkeypatch):
+    monkeypatch.setattr(adapter.shutil, "which", lambda name: None)
+    with pytest.raises(adapter.AdapterError, match="not found on PATH"):
+        adapter.send(make_config(), "hello")

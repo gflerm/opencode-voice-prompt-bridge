@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -11,6 +12,14 @@ from config import OpencodeConfig
 
 class AdapterError(RuntimeError):
     """Raised when the OpenCode handoff cannot be performed."""
+
+
+def resolve_executable(command: str) -> str:
+    """Resolve a command name to a full path (finds npm .cmd shims on Windows)."""
+    resolved = shutil.which(command)
+    if resolved is None:
+        raise AdapterError(f"executable not found on PATH: {command!r}")
+    return resolved
 
 
 def build_args(config: OpencodeConfig, prompt: str) -> list[str]:
@@ -43,6 +52,10 @@ def send(config: OpencodeConfig, prompt: str, wait: bool = False) -> subprocess.
     wait=True the process is awaited and non-zero exits raise.
     """
     args = build_args(config, prompt)
+    args[0] = resolve_executable(config.command)
+    if args[0].lower().endswith((".cmd", ".bat")):
+        # cmd.exe shims cannot carry newlines in arguments.
+        args[-1] = " ".join(args[-1].split())
     flags = _console_flags(config)
     try:
         if wait:
