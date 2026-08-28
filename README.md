@@ -17,7 +17,9 @@ goals:
   - title: "Multilingual: large-v3 with per-utterance EN/AF auto-detect"
     done: true
   - title: "Publish to GitHub"
-    done: false
+    done: true
+  - title: "Reliability: single-instance guard + epoch event ids (restart-proof delivery)"
+    done: true
   - title: "Spec section 14 reliability soak (100 cycles)"
     done: false
 reminders:
@@ -32,6 +34,12 @@ timeline:
     date: "2026-08-28"
     done: true
   - title: "Single-instance guard fixed intermittent delivery"
+    date: "2026-08-28"
+    done: true
+  - title: "Root cause closed: epoch event ids make app restarts invisible to the plugin"
+    date: "2026-08-28"
+    done: true
+  - title: "Published to GitHub (MIT)"
     date: "2026-08-28"
     done: true
 ---
