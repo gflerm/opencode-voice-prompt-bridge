@@ -271,7 +271,7 @@ class App:
                     self.review.send_failed(payload)
         except queue.Empty:
             pass
-        if self.bridge is not None and self._bound_to_opencode and self._native_pending is not None:
+        if self.bridge is not None and self._native_pending is not None:
             pending_payload, published_at = self._native_pending
             fetched = self.bridge.state.fetches_for(self._native_event_id)
             if fetched > 0:
