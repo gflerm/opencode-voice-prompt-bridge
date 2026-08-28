@@ -3,11 +3,24 @@
 from __future__ import annotations
 
 import threading
+import wave
+from pathlib import Path
 
 import numpy as np
 import sounddevice as sd
 
 from config import AudioConfig
+
+
+def save_wav(path: Path, audio: np.ndarray, sample_rate: int) -> None:
+    """Write mono float32 audio (in [-1, 1]) as 16-bit PCM WAV."""
+    pcm = np.clip(audio, -1.0, 1.0)
+    pcm = (pcm * 32767.0).astype(np.int16)
+    with wave.open(str(path), "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(pcm.tobytes())
 
 
 def list_input_devices() -> list[tuple[int, str]]:

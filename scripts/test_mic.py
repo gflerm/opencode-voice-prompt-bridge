@@ -11,7 +11,6 @@ from __future__ import annotations
 import argparse
 import sys
 import time
-import wave
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -19,7 +18,7 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 
 import numpy as np
 
-from audio import Recorder, list_input_devices
+from audio import Recorder, list_input_devices, save_wav
 from config import load_config
 
 
@@ -31,16 +30,6 @@ def parse_args() -> argparse.Namespace:
         help="record for a fixed duration instead of waiting for Enter",
     )
     return parser.parse_args()
-
-
-def save_wav(path: Path, audio: np.ndarray, sample_rate: int) -> None:
-    pcm = np.clip(audio, -1.0, 1.0)
-    pcm = (pcm * 32767.0).astype(np.int16)
-    with wave.open(str(path), "wb") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(sample_rate)
-        wf.writeframes(pcm.tobytes())
 
 
 def main() -> int:

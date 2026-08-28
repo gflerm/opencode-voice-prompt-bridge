@@ -18,8 +18,11 @@ block_ms = 30
 gain = 1.0
 
 [whisper]
-# Model size: small.en | medium.en | distil-large-v3 | large-v3
-model = "small.en"
+# Model profiles (benchmarked 2026-08-28 on RTX 5070, CUDA float16):
+#   fast     = small.en          (0.13s median, 74% word score)
+#   balanced = medium.en         (0.22s median, 77%, steadiest on technical terms)
+#   accuracy = distil-large-v3   (0.16s median, 77%, best on "dot" identifiers)
+model = "medium.en"
 # "auto" | "cuda" | "cpu"
 device = "auto"
 # "auto" | "float16" | "bfloat16" | "int8_float16" | "int8" | "float32"
