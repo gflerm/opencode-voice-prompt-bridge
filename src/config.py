@@ -67,6 +67,9 @@ class UiConfig:
     # Where the review window docks: bottom_right | bottom_left | top_right | top_left | center
     anchor: str = "bottom_right"
     margin: int = 48
+    # System tray icon (status tooltip, hotkey + OpenCode binding toggles,
+    # Quit). Keep enabled when running windowless via autostart.
+    tray_icon: bool = True
 
 
 @dataclass(frozen=True)

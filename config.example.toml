@@ -72,6 +72,9 @@ direct_send = false
 # Where the review window docks: bottom_right | bottom_left | top_right | top_left | center
 anchor = "bottom_right"
 margin = 48
+# System tray icon (status tooltip, hotkey + OpenCode binding toggles,
+# Quit). The only clean exit when running windowless via autostart.
+tray_icon = true
 
 [adaptation]
 # SQLite database for glossary terms, learned corrections and sessions.

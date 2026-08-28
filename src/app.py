@@ -26,6 +26,7 @@ from config import REPO_ROOT, load_config
 from hotkeys import GlobalHotkey
 from storage import AdaptationStore, seed_glossary
 from transcriber import Transcriber
+from tray import VoiceTray
 from ui_review import ReviewManager, ReviewPayload
 
 UI_EVENT_TRANSCRIPT = "transcript"
@@ -90,12 +91,68 @@ class App:
         self.worker = threading.Thread(target=self._transcribe_worker, daemon=True)
         self.worker.start()
 
+        self._ptt_enabled = True
+        self._bound_to_opencode = True
+        self.tray: VoiceTray | None = (
+            VoiceTray(
+                toggles=[
+                    ("Hotkey active", lambda: self._ptt_enabled, self._set_ptt_enabled),
+                    (
+                        "Bound to OpenCode",
+                        lambda: self._bound_to_opencode,
+                        self._set_bound_to_opencode,
+                    ),
+                ]
+            )
+            if self.config.ui.tray_icon
+            else None
+        )
+
+    def _set_ptt_enabled(self, enabled: bool) -> None:
+        """Tray toggle: detach/reattach the global hotkey listeners."""
+        was_pressed = self.hotkey.is_pressed
+        if enabled and not self._ptt_enabled:
+            self.hotkey.start()
+            self.bypass_hotkey.start()
+            print("[tray] push-to-talk enabled - Caps Lock live again")
+        elif not enabled and self._ptt_enabled:
+            self.hotkey.stop()
+            self.bypass_hotkey.stop()
+            print("[tray] push-to-talk disabled - Caps Lock behaves normally")
+        self._ptt_enabled = enabled
+        if was_pressed and not enabled:
+            try:
+                self.recorder.stop()
+            except Exception:
+                pass
+            if self.bridge is not None:
+                self.bridge.state.set_status("idle")
+        self._set_tray_status("idle" if enabled else "disabled")
+
+    def _set_bound_to_opencode(self, bound: bool) -> None:
+        """Tray toggle: native plugin delivery vs. focused-window delivery."""
+        self._bound_to_opencode = bound
+        if bound:
+            print("[tray] bound to OpenCode - transcripts go to the companion plugin")
+        else:
+            print("[tray] unbound - dictation goes to the window focused at record start")
+        self._set_tray_status("idle")
+
+    def _set_bridge_status(self, status: str) -> None:
+        """Mirror recording state to the plugin only while bound."""
+        if self.bridge is not None and self._bound_to_opencode:
+            self.bridge.state.set_status(status)
+
+    def _set_tray_status(self, status: str) -> None:
+        if self.tray is not None:
+            self.tray.set_status(status)
+
     def _on_record_start(self) -> None:
         self.target_hwnd = tui_adapter.capture_foreground()
         try:
             self.recorder.start()
-            if self.bridge is not None:
-                self.bridge.state.set_status("recording")
+            self._set_bridge_status("recording")
+            self._set_tray_status("recording")
             print("[rec] recording...")
         except Exception as exc:
             print(f"[rec] FAILED to start: {exc}")
@@ -106,8 +163,8 @@ class App:
         except Exception as exc:
             print(f"[rec] stop failed: {exc}")
             return
-        if self.bridge is not None:
-            self.bridge.state.set_status("transcribing")
+        self._set_bridge_status("transcribing")
+        self._set_tray_status("transcribing")
         if audio.size == 0:
             print("[app] empty capture - ignored")
             return
@@ -153,7 +210,9 @@ class App:
                     learned = self.engine.learn_pairs(pairs)
                     if learned:
                         print(f"[adapt] learned {learned} correction(s)")
-                if self.config.opencode.mode == "tui":
+                if self.config.opencode.mode == "tui" or (
+                    self.config.opencode.mode == "native" and not self._bound_to_opencode
+                ):
                     tui_adapter.send_to_window(
                         self.target_hwnd,
                         text,
@@ -161,7 +220,7 @@ class App:
                         input_method=self.config.opencode.input_method,
                     )
                 elif self.config.opencode.mode == "native":
-                    # Fallback path when the plugin never picked the text up.
+                    # Bound native mode: fallback when the plugin never fetched.
                     tui_adapter.send_to_window(
                         self.target_hwnd, text, press_enter=False, input_method="type"
                     )
@@ -178,6 +237,9 @@ class App:
         threading.Thread(target=job, daemon=True).start()
 
     def _poll_events(self) -> None:
+        if self.tray is not None and self.tray.request_quit:
+            self.root.quit()
+            return
         try:
             while True:
                 event, payload = self.events.get_nowait()
@@ -187,7 +249,8 @@ class App:
                     self.last_inference_s = result.inference_s
                     note = " (adapted)" if review_payload.text != review_payload.original else ""
                     print(f"[app] transcript ready ({result.inference_s:.2f}s){note}")
-                    if self.bridge is not None:
+                    self._set_tray_status("transcribed")
+                    if self.bridge is not None and self._bound_to_opencode:
                         self._native_event_id = self.bridge.state.publish_transcript(review_payload.text)
                         self._native_pending = (review_payload, time.time())
                         print(f"[native] transcript published (id {self._native_event_id}) - waiting for OpenCode plugin")
@@ -207,7 +270,7 @@ class App:
                     self.review.send_failed(payload)
         except queue.Empty:
             pass
-        if self.bridge is not None and self._native_pending is not None:
+        if self.bridge is not None and self._bound_to_opencode and self._native_pending is not None:
             pending_payload, published_at = self._native_pending
             fetched = self.bridge.state.fetches_for(self._native_event_id)
             if fetched > 0:
@@ -222,6 +285,9 @@ class App:
     def run(self) -> int:
         self.hotkey.start()
         self.bypass_hotkey.start()
+        if self.tray is not None:
+            self.tray.start()
+            print("[tray] icon running - right-click for toggles and Quit")
         if self.hotkey.suppress_failed:
             print("WARNING: key suppression unavailable - hotkey may leak to other apps")
         key = self.config.hotkey.key.upper()
@@ -243,15 +309,34 @@ class App:
         finally:
             self.hotkey.stop()
             self.bypass_hotkey.stop()
+            try:
+                self.recorder.stop()
+            except Exception:
+                pass
             self.transcribe_jobs.put(None)
             if self.bridge is not None:
                 self.bridge.stop()
+            if self.tray is not None:
+                self.tray.stop()
             self.store.close()
             print("stopped")
         return 0
 
 
+def _redirect_windowless_output() -> None:
+    """pythonw has no console: route prints to data/app.log."""
+    if sys.stdout is not None and sys.stderr is not None:
+        return
+    log_path = REPO_ROOT / "data" / "app.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = open(log_path, "a", buffering=1, encoding="utf-8", errors="replace")
+    sys.stdout = sys.stdout or handle
+    sys.stderr = sys.stderr or handle
+    print("--- windowless session start ---")
+
+
 def main() -> int:
+    _redirect_windowless_output()
     return App().run()
 
 
