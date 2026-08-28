@@ -31,6 +31,47 @@ if sys.platform == "win32":
 CF_DIB = 8
 GMEM_MOVEABLE = 0x0002
 
+INPUT_KEYBOARD = 1
+KEYEVENTF_KEYUP = 0x0002
+KEYEVENTF_UNICODE = 0x0004
+_ULONGLONG = ctypes.c_uint64
+
+
+class _KEYBDINPUT(ctypes.Structure):
+    _fields_ = [
+        ("wVk", wintypes.WORD),
+        ("wScan", wintypes.WORD),
+        ("dwFlags", wintypes.DWORD),
+        ("time", wintypes.DWORD),
+        ("dwExtraInfo", _ULONGLONG),
+    ]
+
+
+class _MOUSEINPUT(ctypes.Structure):
+    _fields_ = [
+        ("dx", wintypes.LONG),
+        ("dy", wintypes.LONG),
+        ("mouseData", wintypes.DWORD),
+        ("dwFlags", wintypes.DWORD),
+        ("time", wintypes.DWORD),
+        ("dwExtraInfo", _ULONGLONG),
+    ]
+
+
+class _INPUTunion(ctypes.Union):
+    _fields_ = [("ki", _KEYBDINPUT), ("mi", _MOUSEINPUT)]
+
+
+class _INPUT(ctypes.Structure):
+    _fields_ = [("type", wintypes.DWORD), ("union", _INPUTunion)]
+
+
+def _unicode_key_event(char: str, up: bool = False) -> None:
+    flags = KEYEVENTF_UNICODE | (KEYEVENTF_KEYUP if up else 0)
+    event = _INPUT(type=INPUT_KEYBOARD)
+    event.union.ki = _KEYBDINPUT(0, ord(char), flags, 0, 0)
+    _user32.SendInput(1, ctypes.byref(event), ctypes.sizeof(_INPUT))
+
 VK_CONTROL = 0x11
 VK_MENU = 0x12
 VK_RETURN = 0x0D
@@ -72,6 +113,17 @@ def _ctrl_v() -> None:
 def _enter() -> None:
     _key(VK_RETURN)
     _key(VK_RETURN, up=True)
+
+
+def _type_text(text: str, char_delay_s: float = 0.002) -> None:
+    """Type text as unicode keystrokes (visible, editable inline, no clipboard)."""
+    import time as _time
+
+    for char in text.replace("\r\n", "\n").replace("\n", " "):
+        _unicode_key_event(char)
+        _unicode_key_event(char, up=True)
+        if char_delay_s:
+            _time.sleep(char_delay_s)
 
 
 def _save_clipboard_image() -> bytes | None:
@@ -137,12 +189,17 @@ def send_to_window(
     text: str,
     restore_clipboard: bool = True,
     settle_s: float = 0.25,
+    press_enter: bool = True,
+    input_method: str = "paste",
 ) -> None:
-    """Paste text into the given window and press Enter.
+    """Deliver text to the given window and optionally press Enter.
 
-    The previous clipboard content (text or image) is saved and restored
-    after the target application has consumed the paste. Raises TuiError
-    without pasting if the target window cannot be focused.
+    input_method "paste" uses the clipboard (fast; the TUI may show a
+    paste chip until submitted). "type" injects unicode keystrokes so
+    the text lands visibly and editably inline, leaving the clipboard
+    untouched. Either way the previous clipboard content is preserved
+    when pasting is used. Raises TuiError without delivering if the
+    target window cannot be focused.
     """
     if not text.strip():
         raise TuiError("refusing to paste an empty prompt")
@@ -150,6 +207,17 @@ def send_to_window(
         raise TuiError("TUI bridge is only implemented on Windows")
     if not hwnd:
         raise TuiError("no target window captured (nothing was focused when recording started)")
+    if input_method not in ("paste", "type"):
+        raise TuiError(f"unknown input_method: {input_method!r}")
+
+    if input_method == "type":
+        activate_window(hwnd)
+        time.sleep(settle_s)
+        _ensure_foreground(hwnd)
+        _type_text(text)
+        if press_enter:
+            _enter()
+        return
 
     image_data = _save_clipboard_image()
     previous = None
@@ -165,7 +233,8 @@ def send_to_window(
         _ensure_foreground(hwnd)
         _ctrl_v()
         time.sleep(settle_s)
-        _enter()
+        if press_enter:
+            _enter()
     finally:
         if restore_clipboard:
             if image_data is not None:

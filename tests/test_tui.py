@@ -26,6 +26,7 @@ def fake_tui(monkeypatch):
     monkeypatch.setattr(tui, "activate_window", lambda hwnd: calls.append(("activate", hwnd)))
     monkeypatch.setattr(tui, "_ctrl_v", lambda: calls.append(("paste",)))
     monkeypatch.setattr(tui, "_enter", lambda: calls.append(("enter",)))
+    monkeypatch.setattr(tui, "_type_text", lambda text, **kw: calls.append(("type", text)))
     monkeypatch.setattr(tui, "_save_clipboard_image", lambda: image["saved"])
     monkeypatch.setattr(tui, "_restore_clipboard_image", lambda data: image["restored"].append(data) or True)
     monkeypatch.setattr(tui.pyperclip, "paste", lambda: clipboard["current"])
@@ -83,3 +84,27 @@ def test_send_fails_loudly_when_focus_not_captured(fake_tui):
         tui.send_to_window(12345, "hello", settle_s=0.0)
     assert ("paste",) not in calls and ("enter",) not in calls
     assert image["restored"] == []  # nothing consumed the clipboard
+
+
+def test_type_mode_types_without_clipboard_or_enter(fake_tui):
+    calls, clipboard, image, fg = fake_tui
+    fg["hwnd"] = 55
+    tui.send_to_window(55, "hello world", press_enter=False, input_method="type", settle_s=0.0)
+    assert calls == [("activate", 55), ("type", "hello world")]
+    assert clipboard["current"] == "old-clipboard"  # untouched
+    assert image["saved"] is None or image["restored"] == []
+
+
+def test_type_mode_with_enter(fake_tui):
+    calls, _clipboard, _image, fg = fake_tui
+    fg["hwnd"] = 55
+    tui.send_to_window(55, "go", press_enter=True, input_method="type", settle_s=0.0)
+    assert calls == [("activate", 55), ("type", "go"), ("enter",)]
+
+
+def test_unknown_input_method_rejected(fake_tui):
+    calls, _clipboard, _image, fg = fake_tui
+    fg["hwnd"] = 55
+    with pytest.raises(tui.TuiError, match="unknown input_method"):
+        tui.send_to_window(55, "hi", input_method="carrier-pigeon")
+    assert calls == []

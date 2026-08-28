@@ -141,7 +141,12 @@ class App:
                     if learned:
                         print(f"[adapt] learned {learned} correction(s)")
                 if self.config.opencode.mode == "tui":
-                    tui_adapter.send_to_window(self.target_hwnd, text)
+                    tui_adapter.send_to_window(
+                        self.target_hwnd,
+                        text,
+                        press_enter=self.config.opencode.auto_enter,
+                        input_method=self.config.opencode.input_method,
+                    )
                 else:
                     oc_adapter.send(self.config.opencode, text)
                 self.events.put((UI_EVENT_SEND_OK, text))

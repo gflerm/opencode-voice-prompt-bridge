@@ -53,6 +53,17 @@ working_dir = ""
 # dictation as soon as the key is released. If the send fails, the
 # review window opens with the text so nothing is lost.
 direct_send = false
+# TUI mode delivery: auto_enter true submits right after the text lands;
+# false leaves it in the prompt for you to review and press Enter.
+auto_enter = true
+# "paste" = clipboard paste (fast; TUI may show a paste chip).
+# "type"  = types the text keystroke-by-keystroke so it appears as
+# normal editable inline text (clipboard untouched).
+input_method = "paste"
+# Opt-in only (spec section 18): skip the review window and send each
+# dictation as soon as the key is released. If the send fails, the
+# review window opens with the text so nothing is lost.
+direct_send = false
 
 [ui]
 # Where the review window docks: bottom_right | bottom_left | top_right | top_left | center

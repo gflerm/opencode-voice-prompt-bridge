@@ -49,6 +49,15 @@ class OpencodeConfig:
     # Opt-in only (spec section 18): skip the review window and send on
     # key release. On send failure the review window opens as fallback.
     direct_send: bool = False
+    # TUI mode delivery:
+    #   auto_enter true  = submit immediately after delivery (fast flow)
+    #   auto_enter false = leave the text in the prompt to review and
+    #                      press Enter yourself
+    # input_method "paste" = clipboard paste (fast; TUI may show a chip)
+    # input_method "type"  = unicode keystrokes, visible and editable
+    #                       inline, clipboard untouched
+    auto_enter: bool = True
+    input_method: str = "paste"
 
 
 @dataclass(frozen=True)
