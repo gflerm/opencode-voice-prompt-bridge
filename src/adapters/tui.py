@@ -117,6 +117,21 @@ def _restore_clipboard_image(data: bytes) -> bool:
         _user32.CloseClipboard()
 
 
+def _ensure_foreground(hwnd: int) -> None:
+    """Verify the target window really has focus; retry once, then fail loudly."""
+    if sys.platform != "win32":
+        return
+    for _attempt in range(2):
+        if int(_user32.GetForegroundWindow()) == hwnd:
+            return
+        activate_window(hwnd)
+        time.sleep(0.15)
+    if int(_user32.GetForegroundWindow()) != hwnd:
+        raise TuiError(
+            "could not focus the target window - send cancelled, text kept in review"
+        )
+
+
 def send_to_window(
     hwnd: int,
     text: str,
@@ -125,8 +140,9 @@ def send_to_window(
 ) -> None:
     """Paste text into the given window and press Enter.
 
-    The previous clipboard content is saved and restored after the
-    target application has consumed the paste.
+    The previous clipboard content (text or image) is saved and restored
+    after the target application has consumed the paste. Raises TuiError
+    without pasting if the target window cannot be focused.
     """
     if not text.strip():
         raise TuiError("refusing to paste an empty prompt")
@@ -142,18 +158,20 @@ def send_to_window(
     except Exception:
         previous = None
 
-    pyperclip.copy(text)
-    activate_window(hwnd)
-    time.sleep(settle_s)
-    _ctrl_v()
-    time.sleep(settle_s)
-    _enter()
-
-    if restore_clipboard:
-        if image_data is not None:
-            _restore_clipboard_image(image_data)
-        elif previous:
-            try:
-                pyperclip.copy(previous)
-            except Exception:
-                pass
+    try:
+        pyperclip.copy(text)
+        activate_window(hwnd)
+        time.sleep(settle_s)
+        _ensure_foreground(hwnd)
+        _ctrl_v()
+        time.sleep(settle_s)
+        _enter()
+    finally:
+        if restore_clipboard:
+            if image_data is not None:
+                _restore_clipboard_image(image_data)
+            elif previous:
+                try:
+                    pyperclip.copy(previous)
+                except Exception:
+                    pass

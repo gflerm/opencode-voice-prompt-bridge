@@ -10,6 +10,15 @@ from pynput import keyboard
 
 from config import HotkeyConfig
 
+if sys.platform == "win32":
+    import ctypes
+
+    _user32 = ctypes.windll.user32
+
+LLKHF_INJECTED = 0x10
+VK_CAPITAL = 0x14
+KEYEVENTF_KEYUP = 0x0002
+
 MIN_HOLD_S = 0.0
 
 WM_KEYDOWN = 0x0100
@@ -117,6 +126,7 @@ class GlobalHotkey:
         self._listener: keyboard.Listener | None = None
         self._lock = threading.Lock()
         self.suppress_failed = False
+        self._caps_before: bool | None = None
 
     @property
     def is_pressed(self) -> bool:
@@ -167,21 +177,44 @@ class GlobalHotkey:
         if vk not in self._vk_codes:
             return False
         if msg in (WM_KEYDOWN, WM_SYSKEYDOWN):
+            self._caps_before = self._caps_toggled()
             with self._lock:
                 self._machine.press()
             return True
         if msg in (WM_KEYUP, WM_SYSKEYUP):
             with self._lock:
                 self._machine.release()
+            self._restore_caps_if_needed()
             return True
         return False
 
+    def _caps_toggled(self) -> bool | None:
+        if sys.platform != "win32":
+            return None
+        return bool(_user32.GetKeyState(VK_CAPITAL) & 1)
+
+    def _tap_caps(self) -> None:
+        if sys.platform != "win32":
+            return
+        _user32.keybd_event(VK_CAPITAL, 0, 0, 0)
+        _user32.keybd_event(VK_CAPITAL, 0, KEYEVENTF_KEYUP, 0)
+
+    def _restore_caps_if_needed(self) -> None:
+        """Undo OS-level Caps Lock toggles that leaked through suppression."""
+        now = self._caps_toggled()
+        if self._caps_before is not None and now is not None and now != self._caps_before:
+            self._tap_caps()
+            self._caps_before = now
+
     def _win32_event_filter(self, msg, data) -> None:  # noqa: ANN001
-        try:
-            if self._handle_raw(msg, data.vkCode) and not self.suppress_failed:
-                self._listener.suppress_event()
-        except Exception:
-            self.suppress_failed = True
+        # Never touch injected events (including our own corrective taps).
+        if getattr(data, "flags", 0) & LLKHF_INJECTED:
+            return
+        should_suppress = self._handle_raw(msg, data.vkCode)
+        if should_suppress and self._listener is not None:
+            # Must NOT be wrapped in try/except: pynput signals suppression
+            # by raising an internal exception that the hook needs to see.
+            self._listener.suppress_event()
 
     def start(self) -> None:
         if self._listener is not None:
@@ -189,6 +222,8 @@ class GlobalHotkey:
         kwargs: dict = {"on_press": self._on_press, "on_release": self._on_release}
         if sys.platform == "win32" and self._vk_codes:
             kwargs["win32_event_filter"] = self._win32_event_filter
+            if not hasattr(keyboard.Listener, "suppress_event"):
+                self.suppress_failed = True
         self._listener = keyboard.Listener(**kwargs)
         self._listener.start()
 

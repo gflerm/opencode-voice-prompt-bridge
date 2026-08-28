@@ -49,3 +49,18 @@ show_console = true
 keep_open = true
 # Optional working directory for the spawned process; empty = inherit.
 working_dir = ""
+
+[ui]
+# Where the review window docks: bottom_right | bottom_left | top_right | top_left | center
+anchor = "bottom_right"
+margin = 48
+
+[adaptation]
+# SQLite database for glossary terms, learned corrections and sessions.
+db_path = "data/adaptation.db"
+# Emergency bypass: tap this key to skip learned corrections once.
+bypass_hotkey = "f9"
+# Local telemetry (timestamp, latency, model, accepted - no prompt text).
+record_sessions = true
+# How many glossary terms are injected as Whisper initial_prompt context.
+initial_prompt_terms = 20

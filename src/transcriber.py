@@ -92,7 +92,12 @@ class Transcriber:
             compute_type=self.compute_type,
         )
 
-    def transcribe(self, audio: np.ndarray, sample_rate: int = TARGET_SAMPLE_RATE) -> Transcript:
+    def transcribe(
+        self,
+        audio: np.ndarray,
+        sample_rate: int = TARGET_SAMPLE_RATE,
+        initial_prompt: str | None = None,
+    ) -> Transcript:
         """Transcribe mono float32 PCM in [-1, 1] (resampled to 16 kHz)."""
         if self._model is None:
             self.load()
@@ -104,6 +109,7 @@ class Transcriber:
             language=self._config.language,
             beam_size=5,
             vad_filter=True,
+            initial_prompt=initial_prompt,
         )
         parts: list[str] = []
         logprobs: list[float] = []

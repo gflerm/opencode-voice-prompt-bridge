@@ -12,6 +12,7 @@ from config import HotkeyConfig, load_config
 from hotkeys import (
     WM_KEYDOWN,
     WM_KEYUP,
+    LLKHF_INJECTED,
     PushToTalkStateMachine,
 )
 from hotkeys import GlobalHotkey
@@ -193,3 +194,72 @@ def test_handle_raw_suppresses_key_repeat_without_retrigger():
     clock.advance(0.5)
     hk._handle_raw(WM_KEYUP, 0x14)
     assert events[-1] == ("stop", 0.7)
+
+
+class FakeKeyData:
+    def __init__(self, vk_code: int, flags: int = 0) -> None:
+        self.vkCode = vk_code
+        self.flags = flags
+
+
+def test_filter_ignores_injected_events():
+    clock, events = FakeClock(), []
+    hk = make_hotkey(events)
+    hk._machine._clock = clock
+
+    hk._win32_event_filter(WM_KEYDOWN, FakeKeyData(0x14, flags=LLKHF_INJECTED))
+    assert events == []
+
+    hk._win32_event_filter(WM_KEYDOWN, FakeKeyData(0x14))
+    assert events == ["start"]
+
+
+def test_filter_ignores_other_keys_and_unknown_messages():
+    clock, events = FakeClock(), []
+    hk = make_hotkey(events)
+    hk._machine._clock = clock
+
+    hk._win32_event_filter(WM_KEYDOWN, FakeKeyData(0x41))
+    hk._win32_event_filter(0x0000, FakeKeyData(0x14))
+    assert events == []
+
+
+def test_caps_guard_restores_toggled_state(monkeypatch):
+    events = []
+    hk = make_hotkey(events)
+    hk._machine._clock = FakeClock()
+    state = {"toggle": False}
+    taps: list[int] = []
+
+    def tap():
+        taps.append(1)
+        state["toggle"] = not state["toggle"]
+
+    monkeypatch.setattr(hk, "_caps_toggled", lambda: state["toggle"])
+    monkeypatch.setattr(hk, "_tap_caps", tap)
+
+    hk._handle_raw(WM_KEYDOWN, 0x14)
+    state["toggle"] = True  # OS toggled despite (failed) suppression
+    hk._handle_raw(WM_KEYUP, 0x14)
+
+    assert taps == [1]
+    assert state["toggle"] is False
+
+
+def test_caps_guard_noop_when_state_unchanged(monkeypatch):
+    events = []
+    hk = make_hotkey(events)
+    hk._machine._clock = FakeClock()
+    state = {"toggle": False}
+    taps: list[int] = []
+
+    def tap():
+        taps.append(1)
+        state["toggle"] = not state["toggle"]
+
+    monkeypatch.setattr(hk, "_caps_toggled", lambda: state["toggle"])
+    monkeypatch.setattr(hk, "_tap_caps", tap)
+
+    hk._handle_raw(WM_KEYDOWN, 0x14)
+    hk._handle_raw(WM_KEYUP, 0x14)
+    assert taps == []
