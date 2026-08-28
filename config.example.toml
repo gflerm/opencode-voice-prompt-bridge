@@ -46,6 +46,11 @@ corpus_dir = "data/corpus"
 #              prompt via its own API (run scripts/install_plugin.py once)
 command = "opencode"
 mode = "tui"
+# Direct-push to the OpenCode TUI (native mode): start the TUI with
+#   opencode --port 4096
+# and the app POSTs transcripts straight into the prompt via
+# /tui/append-prompt - no companion plugin, no polling. Empty = use the
+# legacy plugin/bridge poll path instead.
 attach_server = ""
 show_console = true
 # Keep the spawned console open after `opencode run` finishes (cmd /k)

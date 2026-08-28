@@ -6,11 +6,13 @@ Quit: Ctrl+C in the console (or close the review window and Ctrl+C).
 
 from __future__ import annotations
 
+import json
 import queue
 import sys
 import threading
 import time
 import tkinter as tk
+import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -32,6 +34,8 @@ from ui_review import ReviewManager, ReviewPayload
 UI_EVENT_TRANSCRIPT = "transcript"
 UI_EVENT_SEND_OK = "send_ok"
 UI_EVENT_SEND_FAIL = "send_fail"
+UI_EVENT_PUSH_OK = "push_ok"
+UI_EVENT_PUSH_FAIL = "push_fail"
 
 
 class App:
@@ -147,12 +151,53 @@ class App:
         if self.tray is not None:
             self.tray.set_status(status)
 
+    def _tui_post(url: str, body: dict) -> None:
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(body).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=3):
+            pass
+
+    def _tui_post_async(self, path: str, body: dict) -> None:
+        """Best-effort fire-and-forget POST to the OpenCode TUI server."""
+        if not (self._bound_to_opencode and self.config.opencode.attach_server):
+            return
+        base = self.config.opencode.attach_server.rstrip("/")
+
+        def job() -> None:
+            try:
+                self._tui_post(f"{base}{path}", body)
+            except Exception:
+                pass
+
+        threading.Thread(target=job, daemon=True).start()
+
+    def _push_to_opencode(self, payload: ReviewPayload) -> None:
+        """Direct-push a transcript into the TUI (attach_server mode)."""
+        def job() -> None:
+            base = self.config.opencode.attach_server.rstrip("/")
+            try:
+                self._tui_post(f"{base}/tui/append-prompt", {"text": payload.text})
+                self._tui_post(
+                    f"{base}/tui/show-toast",
+                    {"message": "voice: text inserted - review and press Enter", "variant": "success"},
+                )
+                self.events.put((UI_EVENT_PUSH_OK, payload))
+            except Exception as exc:
+                self.events.put((UI_EVENT_PUSH_FAIL, (payload, str(exc))))
+
+        threading.Thread(target=job, daemon=True).start()
+
     def _on_record_start(self) -> None:
         self.target_hwnd = tui_adapter.capture_foreground()
         try:
             self.recorder.start()
             self._set_bridge_status("recording")
             self._set_tray_status("recording")
+            self._tui_post_async("/tui/show-toast", {"message": "voice: recording...", "variant": "info"})
             print("[rec] recording...")
         except Exception as exc:
             print(f"[rec] FAILED to start: {exc}")
@@ -250,7 +295,9 @@ class App:
                     note = " (adapted)" if review_payload.text != review_payload.original else ""
                     print(f"[app] transcript ready ({result.inference_s:.2f}s){note}")
                     self._set_tray_status("transcribed")
-                    if self.bridge is not None and self._bound_to_opencode:
+                    if self._bound_to_opencode and self.config.opencode.attach_server:
+                        self._push_to_opencode(review_payload)
+                    elif self.bridge is not None and self._bound_to_opencode:
                         self._native_event_id = self.bridge.state.publish_transcript(review_payload.text)
                         self._native_pending = (review_payload, time.time())
                         print(f"[native] transcript published (id {self._native_event_id}) - waiting for OpenCode plugin")
@@ -260,6 +307,14 @@ class App:
                     else:
                         self.review.present(review_payload)
                     self._set_bridge_status("idle")
+                elif event == UI_EVENT_PUSH_OK:
+                    print("[push] delivered to OpenCode TUI")
+                    self._set_tray_status("delivered")
+                elif event == UI_EVENT_PUSH_FAIL:
+                    push_payload, push_err = payload
+                    print(f"[push] failed: {push_err} - opening review window so the text is not lost")
+                    self.review.present(push_payload)
+                    self._set_tray_status("send failed")
                 elif event == UI_EVENT_SEND_OK:
                     print("[app] sent")
                     self.review.send_succeeded()
