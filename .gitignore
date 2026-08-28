@@ -25,3 +25,6 @@ config.toml
 # OS
 Thumbs.db
 Desktop.ini
+
+# Local spec binaries
+docs/*.pdf
