@@ -9,7 +9,12 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from config import HotkeyConfig, load_config
-from hotkeys import PushToTalkStateMachine
+from hotkeys import (
+    WM_KEYDOWN,
+    WM_KEYUP,
+    PushToTalkStateMachine,
+)
+from hotkeys import GlobalHotkey
 
 
 class FakeClock:
@@ -137,3 +142,54 @@ def test_trim_silence_edge(audio_builder):
     from audio import Recorder
 
     assert Recorder.trim_silence(audio_builder()).size == 0
+
+
+def make_hotkey(events):
+    return GlobalHotkey(
+        HotkeyConfig(key="caps_lock", min_duration_ms=200),
+        on_start=lambda: events.append("start"),
+        on_stop=lambda d: events.append(("stop", round(d, 3))),
+        on_tap=lambda d: events.append(("tap", round(d, 3))),
+    )
+
+
+def test_vk_codes_resolved_for_caps_lock():
+    hk = make_hotkey([])
+    assert hk._vk_codes == {0x14}
+
+
+def test_handle_raw_drives_state_machine_and_requests_suppression():
+    clock, events = FakeClock(), []
+    hk = make_hotkey(events)
+    hk._machine._clock = clock
+
+    assert hk._handle_raw(WM_KEYDOWN, 0x14) is True
+    assert events == ["start"]
+    clock.advance(1.0)
+    assert hk._handle_raw(WM_KEYUP, 0x14) is True
+    assert events == ["start", ("stop", 1.0)]
+
+
+def test_handle_raw_ignores_other_keys():
+    events = []
+    hk = make_hotkey(events)
+
+    assert hk._handle_raw(WM_KEYDOWN, 0x41) is False
+    assert hk._handle_raw(0x0000, 0x14) is False
+    assert events == []
+
+
+def test_handle_raw_suppresses_key_repeat_without_retrigger():
+    clock, events = FakeClock(), []
+    hk = make_hotkey(events)
+    hk._machine._clock = clock
+
+    hk._handle_raw(WM_KEYDOWN, 0x14)
+    clock.advance(0.1)
+    hk._handle_raw(WM_KEYDOWN, 0x14)
+    clock.advance(0.1)
+    hk._handle_raw(WM_KEYDOWN, 0x14)
+    assert events == ["start"]
+    clock.advance(0.5)
+    hk._handle_raw(WM_KEYUP, 0x14)
+    assert events[-1] == ("stop", 0.7)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import threading
 from typing import Callable
 
@@ -10,6 +11,22 @@ from pynput import keyboard
 from config import HotkeyConfig
 
 MIN_HOLD_S = 0.0
+
+WM_KEYDOWN = 0x0100
+WM_KEYUP = 0x0101
+WM_SYSKEYDOWN = 0x0104
+WM_SYSKEYUP = 0x0105
+
+_VK_BY_NAME = {
+    "escape": 0x1B, "tab": 0x09, "caps_lock": 0x14, "space": 0x20,
+    "enter": 0x0D, "return": 0x0D, "backspace": 0x08, "delete": 0x2E,
+    "insert": 0x2D, "home": 0x24, "end": 0x23, "page_up": 0x21,
+    "page_down": 0x22, "scroll_lock": 0x91, "num_lock": 0x90,
+    "print_screen": 0x2C, "menu": 0x5D,
+    "shift_l": 0xA0, "shift_r": 0xA1, "ctrl_l": 0xA2, "ctrl_r": 0xA3,
+    "alt_l": 0xA4, "alt_r": 0xA5, "cmd": 0x5B, "cmd_r": 0x5C,
+}
+_VK_BY_NAME.update({f"f{i}": 0x70 + i - 1 for i in range(1, 25)})
 
 
 class PushToTalkStateMachine:
@@ -80,8 +97,11 @@ def _parse_key(name: str):
 class GlobalHotkey:
     """Wires a global pynput key to a PushToTalkStateMachine.
 
-    The configured key is suppressed while held so it does not leak
-    into other applications (e.g. Caps Lock toggling during dictation).
+    On Windows the configured key is suppressed via a low-level event
+    filter so it does not leak into other applications (e.g. Caps Lock
+    toggling during dictation). Suppression requires the key to map to
+    a virtual-key code; otherwise events are still received but not
+    suppressed.
     """
 
     def __init__(
@@ -93,6 +113,7 @@ class GlobalHotkey:
     ) -> None:
         self._target_key = _parse_key(config.key)
         self._machine = PushToTalkStateMachine(config, on_start, on_stop, on_tap)
+        self._vk_codes = self._resolve_vk_codes(self._target_key)
         self._listener: keyboard.Listener | None = None
         self._lock = threading.Lock()
 
@@ -100,41 +121,74 @@ class GlobalHotkey:
     def is_pressed(self) -> bool:
         return self._machine.is_pressed
 
+    @staticmethod
+    def _resolve_vk_codes(target) -> set[int]:  # noqa: ANN001
+        codes: set[int] = set()
+        name = getattr(target, "name", None)
+        if name in _VK_BY_NAME:
+            codes.add(_VK_BY_NAME[name])
+        char = getattr(target, "char", None)
+        if isinstance(char, str) and len(char) == 1:
+            upper = char.upper()
+            if ("A" <= upper <= "Z") or ("0" <= upper <= "9"):
+                codes.add(ord(upper))
+        return codes
+
     def _matches(self, key) -> bool:  # noqa: ANN001
         if key == self._target_key:
             return True
-        normalized = self._target_key
-        if isinstance(normalized, keyboard.Key) and isinstance(key, keyboard.KeyCode):
+        if isinstance(key, keyboard.KeyCode) and isinstance(self._target_key, keyboard.KeyCode):
+            return key == self._target_key
+        if isinstance(self._target_key, keyboard.Key) and isinstance(key, keyboard.KeyCode):
             return False
-        if isinstance(key, keyboard.KeyCode) and isinstance(normalized, keyboard.KeyCode):
-            return key == normalized
-        # Key <-> KeyCode equivalences (e.g. ctrl variants) are left strict for v0.1
         return False
 
-    def _on_press(self, key) -> bool:  # noqa: ANN001
+    def _on_press(self, key) -> None:  # noqa: ANN001
         if key is None:
-            return True
+            return
         with self._lock:
             if self._matches(key):
                 self._machine.press()
-                return False  # suppress the key globally
-        return True
 
-    def _on_release(self, key) -> bool:  # noqa: ANN001
+    def _on_release(self, key) -> None:  # noqa: ANN001
         if key is None:
-            return True
+            return
         with self._lock:
             if self._matches(key):
                 self._machine.release()
-                return False
-        return True
+
+    def _handle_raw(self, msg: int, vk: int) -> bool:
+        """Feed a raw win32 event to the state machine.
+
+        Returns True when the event belongs to the push-to-talk key and
+        should be suppressed from other applications.
+        """
+        if vk not in self._vk_codes:
+            return False
+        if msg in (WM_KEYDOWN, WM_SYSKEYDOWN):
+            with self._lock:
+                self._machine.press()
+            return True
+        if msg in (WM_KEYUP, WM_SYSKEYUP):
+            with self._lock:
+                self._machine.release()
+            return True
+        return False
+
+    def _win32_event_filter(self, msg, data) -> None:  # noqa: ANN001
+        try:
+            if self._handle_raw(msg, data.vkCode):
+                self._listener.suppress_event()
+        except Exception:
+            pass
 
     def start(self) -> None:
         if self._listener is not None:
             raise RuntimeError("GlobalHotkey already running")
-        self._listener = keyboard.Listener(
-            on_press=self._on_press, on_release=self._on_release, suppress=self._matches
-        )
+        kwargs: dict = {"on_press": self._on_press, "on_release": self._on_release}
+        if sys.platform == "win32" and self._vk_codes:
+            kwargs["win32_event_filter"] = self._win32_event_filter
+        self._listener = keyboard.Listener(**kwargs)
         self._listener.start()
 
     def stop(self) -> None:
