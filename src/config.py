@@ -46,6 +46,9 @@ class OpencodeConfig:
     show_console: bool = True
     keep_open: bool = True
     working_dir: str = ""
+    # Opt-in only (spec section 18): skip the review window and send on
+    # key release. On send failure the review window opens as fallback.
+    direct_send: bool = False
 
 
 @dataclass(frozen=True)

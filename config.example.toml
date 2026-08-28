@@ -49,6 +49,10 @@ show_console = true
 keep_open = true
 # Optional working directory for the spawned process; empty = inherit.
 working_dir = ""
+# Opt-in only (spec section 18): skip the review window and send each
+# dictation as soon as the key is released. If the send fails, the
+# review window opens with the text so nothing is lost.
+direct_send = false
 
 [ui]
 # Where the review window docks: bottom_right | bottom_left | top_right | top_left | center

@@ -121,7 +121,10 @@ def test_load_config_defaults_and_roundtrip(tmp_path):
     toml.write_text(
         '[hotkey]\nkey = "f9"\nmin_duration_ms = 300\n'
         "[audio]\ndevice = 5\nsample_rate = 48000\n"
-        '[whisper]\nmodel = "medium.en"\n',
+        '[whisper]\nmodel = "medium.en"\n'
+        '[opencode]\nmode = "tui"\ndirect_send = true\n'
+        '[ui]\nanchor = "top_left"\n'
+        '[adaptation]\nbypass_hotkey = "f10"\n',
         encoding="utf-8",
     )
     cfg = load_config(toml)
@@ -131,6 +134,10 @@ def test_load_config_defaults_and_roundtrip(tmp_path):
     assert cfg.audio.sample_rate == 48000
     assert cfg.whisper.model == "medium.en"
     assert cfg.whisper.language == "en"
+    assert cfg.opencode.mode == "tui"
+    assert cfg.opencode.direct_send is True
+    assert cfg.ui.anchor == "top_left"
+    assert cfg.adaptation.bypass_hotkey == "f10"
 
 
 @pytest.mark.parametrize(

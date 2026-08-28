@@ -41,6 +41,7 @@ class App:
         self.transcribe_jobs: queue.Queue = queue.Queue()
         self.target_hwnd = 0
         self.last_inference_s = 0.0
+        self.last_payload: ReviewPayload | None = None
 
         db_path = Path(self.config.adaptation.db_path)
         if not db_path.is_absolute():
@@ -159,15 +160,23 @@ class App:
                 event, payload = self.events.get_nowait()
                 if event == UI_EVENT_TRANSCRIPT:
                     result, review_payload = payload
+                    self.last_payload = review_payload
                     self.last_inference_s = result.inference_s
                     note = " (adapted)" if review_payload.text != review_payload.original else ""
                     print(f"[app] transcript ready ({result.inference_s:.2f}s){note}")
-                    self.review.present(review_payload)
+                    if self.config.opencode.direct_send:
+                        print("[direct] sending straight to target (review skipped)")
+                        self._dispatch_send(review_payload.text, [])
+                    else:
+                        self.review.present(review_payload)
                 elif event == UI_EVENT_SEND_OK:
                     print("[app] sent")
                     self.review.send_succeeded()
                 elif event == UI_EVENT_SEND_FAIL:
                     print(f"[app] send failed: {payload}")
+                    if self.config.opencode.direct_send and self.last_payload is not None:
+                        print("[app] opening review window so the text is not lost")
+                        self.review.present(self.last_payload)
                     self.review.send_failed(payload)
         except queue.Empty:
             pass
