@@ -130,13 +130,17 @@ class ReviewWindow:
             return
         self._closed = True
         self.win.destroy()
-        self._callbacks.on_cancel(self.current_text())
+        # Widgets are gone after destroy(); the manager only needs the
+        # close notification, never the text.
+        self._callbacks.on_cancel("")
 
     def finish_ok(self, detail: str) -> None:
         self._closed = True
         self.win.destroy()
 
     def finish_error(self, detail: str) -> None:
+        if self._closed:
+            return
         self.text.config(state="normal")
         self.status.config(text=f"SEND FAILED: {detail}", fg="#a00")
         self.win.title("Voice Prompt - send failed (edit & retry, or Esc)")
@@ -192,5 +196,5 @@ class ReviewManager:
             self._handle_close("")
 
     def send_failed(self, detail: str) -> None:
-        if self._window is not None:
+        if self._window is not None and not self._window.closed:
             self._window.finish_error(detail)
