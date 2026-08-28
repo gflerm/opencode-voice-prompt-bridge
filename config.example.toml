@@ -32,3 +32,15 @@ language = "en"
 [benchmark]
 # Directory of WAV files used by scripts/benchmark_whisper.py
 corpus_dir = "data/corpus"
+
+[opencode]
+# How the final prompt reaches OpenCode (FR-04). Argument arrays only,
+# never a shell string.
+command = "opencode"
+# "run"  = spawn `opencode run <prompt>` (new console window when show_console)
+# "attach" = `opencode run --attach <server> <prompt>` (needs attach_server)
+mode = "run"
+attach_server = ""
+show_console = true
+# Optional working directory for the spawned process; empty = inherit.
+working_dir = ""

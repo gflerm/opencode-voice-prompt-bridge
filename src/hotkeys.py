@@ -116,6 +116,7 @@ class GlobalHotkey:
         self._vk_codes = self._resolve_vk_codes(self._target_key)
         self._listener: keyboard.Listener | None = None
         self._lock = threading.Lock()
+        self.suppress_failed = False
 
     @property
     def is_pressed(self) -> bool:
@@ -177,10 +178,10 @@ class GlobalHotkey:
 
     def _win32_event_filter(self, msg, data) -> None:  # noqa: ANN001
         try:
-            if self._handle_raw(msg, data.vkCode):
+            if self._handle_raw(msg, data.vkCode) and not self.suppress_failed:
                 self._listener.suppress_event()
         except Exception:
-            pass
+            self.suppress_failed = True
 
     def start(self) -> None:
         if self._listener is not None:

@@ -39,11 +39,21 @@ class BenchmarkConfig:
 
 
 @dataclass(frozen=True)
+class OpencodeConfig:
+    command: str = "opencode"
+    mode: str = "run"  # "run" | "attach"
+    attach_server: str = ""
+    show_console: bool = True
+    working_dir: str = ""
+
+
+@dataclass(frozen=True)
 class AppConfig:
     hotkey: HotkeyConfig = field(default_factory=HotkeyConfig)
     audio: AudioConfig = field(default_factory=AudioConfig)
     whisper: WhisperConfig = field(default_factory=WhisperConfig)
     benchmark: BenchmarkConfig = field(default_factory=BenchmarkConfig)
+    opencode: OpencodeConfig = field(default_factory=OpencodeConfig)
 
 
 def _build(cls, data: dict):  # noqa: ANN001 - small internal helper
@@ -63,4 +73,5 @@ def load_config(path: Path | str | None = None) -> AppConfig:
         audio=_build(AudioConfig, raw.get("audio", {})),
         whisper=_build(WhisperConfig, raw.get("whisper", {})),
         benchmark=_build(BenchmarkConfig, raw.get("benchmark", {})),
+        opencode=_build(OpencodeConfig, raw.get("opencode", {})),
     )
