@@ -126,3 +126,13 @@ def test_draw_icon_renders_mic_glyph():
 
 def test_ui_tray_icon_default_enabled():
     assert UiConfig().tray_icon is True
+
+
+def test_language_arg_mapping():
+    from transcriber import _language_arg
+
+    assert _language_arg(None) is None
+    assert _language_arg("auto") is None
+    assert _language_arg("AUTO") is None
+    assert _language_arg("en") == "en"
+    assert _language_arg("af") == "af"

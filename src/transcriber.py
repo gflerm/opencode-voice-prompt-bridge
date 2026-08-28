@@ -59,6 +59,18 @@ def _resolve_compute_type(config: WhisperConfig, device: str) -> str:
 TARGET_SAMPLE_RATE = 16000
 
 
+def _language_arg(language: str | None) -> str | None:
+    """Map config language to faster-whisper's language arg.
+
+    None/""/"auto" lets Whisper detect the language per utterance
+    (requires a multilingual model; *.en models are English-only).
+    """
+    if language is None:
+        return None
+    lowered = language.strip().lower()
+    return None if lowered in ("", "auto") else lowered
+
+
 def resample_to_16k(audio: np.ndarray, sample_rate: int) -> np.ndarray:
     """Linear-interpolation resample to 16 kHz mono (good enough for spike)."""
     if sample_rate == TARGET_SAMPLE_RATE or audio.size == 0:
@@ -106,7 +118,7 @@ class Transcriber:
         started = time.perf_counter()
         segments, info = self._model.transcribe(
             audio,
-            language=self._config.language,
+            language=_language_arg(self._config.language),
             beam_size=5,
             vad_filter=True,
             initial_prompt=initial_prompt,

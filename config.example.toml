@@ -22,11 +22,15 @@ gain = 1.0
 #   fast     = small.en          (0.13s median, 74% word score)
 #   balanced = medium.en         (0.22s median, 77%, steadiest on technical terms)
 #   accuracy = distil-large-v3   (0.16s median, 77%, best on "dot" identifiers)
+# Multilingual (Afrikaans etc.): "medium" or "large-v3" (no .en suffix).
 model = "medium.en"
 # "auto" | "cuda" | "cpu"
 device = "auto"
 # "auto" | "float16" | "bfloat16" | "int8_float16" | "int8" | "float32"
 compute_type = "auto"
+# "auto" = detect the language per utterance (multilingual models only).
+# Otherwise an ISO code: "en", "af", ... Forcing "en" with an English-only
+# (.en) model is the fastest path for English dictation.
 language = "en"
 
 [benchmark]
