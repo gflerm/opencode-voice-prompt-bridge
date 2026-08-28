@@ -60,16 +60,16 @@ class VoiceTray:
         import pystray
 
         pys = self._pystray or pystray
-        items: list = [pys.Item(self._tooltip(), action=None, enabled=False), pys.Menu.SEPARATOR]
+        items: list = [pys.MenuItem(self._tooltip(), action=None, enabled=False), pys.Menu.SEPARATOR]
         for index, toggle in enumerate(self._toggles):
             if index:
                 items.append(pys.Menu.SEPARATOR)
             label, getter, setter = toggle
             items.append(
-                pys.Item(label, self._toggle_action(getter, setter), checked=lambda *args, g=getter: g())
+                pys.MenuItem(label, self._toggle_action(getter, setter), checked=lambda *args, g=getter: g())
             )
         items.append(pys.Menu.SEPARATOR)
-        items.append(pys.Item("Quit", self._on_quit))
+        items.append(pys.MenuItem("Quit", self._on_quit))
         self._icon = pys.Icon("opencode_voice_bridge", draw_icon(), self._tooltip(), pys.Menu(*items))
         self._icon.run_detached()
 

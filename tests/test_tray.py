@@ -43,7 +43,7 @@ class StubIcon:
 
 
 def make_stub():
-    return SimpleNamespace(Item=StubItem, Menu=StubMenu, Icon=StubIcon)
+    return SimpleNamespace(MenuItem=StubItem, Menu=StubMenu, Icon=StubIcon)
 
 
 def make_tray(toggles=None):
