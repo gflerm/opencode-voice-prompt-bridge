@@ -4,12 +4,17 @@ Endpoints (127.0.0.1 only):
   GET /state?since=N -> {"status", "event", "id", "text", "fetches"}
     status: idle | recording | transcribing
     event:  null | "transcript"  (only when id > since)
+
+Event ids are millisecond timestamps: the plugin's since-marker survives
+app restarts, so a fresh counter starting at 1 would make every new
+dictation invisible (id 1 is not > an old lastId of 5).
 """
 
 from __future__ import annotations
 
 import json
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
@@ -31,7 +36,7 @@ class VoiceBridgeState:
 
     def publish_transcript(self, text: str) -> int:
         with self._lock:
-            self._event_id += 1
+            self._event_id = max(self._event_id + 1, int(time.time() * 1000))
             self._event_kind = "transcript"
             self._event_text = text
             self._fetches = 0

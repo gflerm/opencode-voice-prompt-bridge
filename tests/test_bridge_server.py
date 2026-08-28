@@ -18,12 +18,15 @@ def test_state_starts_idle():
     assert snap["event"] is None
 
 
-def test_publish_increments_ids_and_since_semantics():
+def test_publish_uses_monotonic_ids_and_since_semantics():
     state = VoiceBridgeState()
     first = state.publish_transcript("one")
     second = state.publish_transcript("two")
 
-    assert (first, second) == (1, 2)
+    # Millisecond-epoch ids: always far above a plugin's stale since
+    # marker, and strictly increasing within the same process.
+    assert first > 1_000_000_000_000
+    assert second > first
     stale = state.snapshot(since=second)
     assert stale["event"] is None
 

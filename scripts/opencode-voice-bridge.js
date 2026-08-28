@@ -77,6 +77,12 @@ export const VoiceBridgePlugin = async ({ client }) => {
       }
     }
 
+    if (state.id < lastId) {
+      // Bridge restarted with fresh ids - resync instead of ignoring
+      // everything below our stale marker.
+      lastId = 0
+    }
+
     if (state.event === "transcript" && state.id > lastId && state.text) {
       try {
         await client.tui.appendPrompt({ body: { text: state.text } })
