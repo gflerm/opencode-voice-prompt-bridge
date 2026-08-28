@@ -259,6 +259,7 @@ class App:
                         self._dispatch_send(review_payload.text, [])
                     else:
                         self.review.present(review_payload)
+                    self._set_bridge_status("idle")
                 elif event == UI_EVENT_SEND_OK:
                     print("[app] sent")
                     self.review.send_succeeded()
