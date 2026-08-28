@@ -41,11 +41,26 @@ class BenchmarkConfig:
 @dataclass(frozen=True)
 class OpencodeConfig:
     command: str = "opencode"
-    mode: str = "run"  # "run" | "attach"
+    mode: str = "run"  # "run" | "attach" | "tui"
     attach_server: str = ""
     show_console: bool = True
     keep_open: bool = True
     working_dir: str = ""
+
+
+@dataclass(frozen=True)
+class UiConfig:
+    # Where the review window docks: bottom_right | bottom_left | top_right | top_left | center
+    anchor: str = "bottom_right"
+    margin: int = 48
+
+
+@dataclass(frozen=True)
+class AdaptationConfig:
+    db_path: str = "data/adaptation.db"
+    bypass_hotkey: str = "f9"
+    record_sessions: bool = True
+    initial_prompt_terms: int = 20
 
 
 @dataclass(frozen=True)
@@ -55,6 +70,8 @@ class AppConfig:
     whisper: WhisperConfig = field(default_factory=WhisperConfig)
     benchmark: BenchmarkConfig = field(default_factory=BenchmarkConfig)
     opencode: OpencodeConfig = field(default_factory=OpencodeConfig)
+    ui: UiConfig = field(default_factory=UiConfig)
+    adaptation: AdaptationConfig = field(default_factory=AdaptationConfig)
 
 
 def _build(cls, data: dict):  # noqa: ANN001 - small internal helper
@@ -75,4 +92,6 @@ def load_config(path: Path | str | None = None) -> AppConfig:
         whisper=_build(WhisperConfig, raw.get("whisper", {})),
         benchmark=_build(BenchmarkConfig, raw.get("benchmark", {})),
         opencode=_build(OpencodeConfig, raw.get("opencode", {})),
+        ui=_build(UiConfig, raw.get("ui", {})),
+        adaptation=_build(AdaptationConfig, raw.get("adaptation", {})),
     )

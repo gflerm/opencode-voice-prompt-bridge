@@ -15,8 +15,21 @@ import pyperclip
 
 if sys.platform == "win32":
     import ctypes
+    from ctypes import wintypes
 
     _user32 = ctypes.windll.user32
+    _kernel32 = ctypes.windll.kernel32
+
+    _kernel32.GlobalAlloc.restype = wintypes.HGLOBAL
+    _kernel32.GlobalAlloc.argtypes = [wintypes.UINT, ctypes.c_size_t]
+    _kernel32.GlobalLock.restype = wintypes.LPVOID
+    _kernel32.GlobalLock.argtypes = [wintypes.HGLOBAL]
+    _kernel32.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
+    _kernel32.GlobalSize.restype = ctypes.c_size_t
+    _kernel32.GlobalSize.argtypes = [wintypes.HGLOBAL]
+
+CF_DIB = 8
+GMEM_MOVEABLE = 0x0002
 
 VK_CONTROL = 0x11
 VK_MENU = 0x12
@@ -61,6 +74,49 @@ def _enter() -> None:
     _key(VK_RETURN, up=True)
 
 
+def _save_clipboard_image() -> bytes | None:
+    """Return raw CF_DIB bytes if an image is on the clipboard, else None."""
+    if sys.platform != "win32" or not _user32.OpenClipboard(0):
+        return None
+    try:
+        if not _user32.IsClipboardFormatAvailable(CF_DIB):
+            return None
+        handle = _user32.GetClipboardData(CF_DIB)
+        if not handle:
+            return None
+        size = _kernel32.GlobalSize(handle)
+        ptr = _kernel32.GlobalLock(handle)
+        if not ptr:
+            return None
+        try:
+            return ctypes.string_at(ptr, size)
+        finally:
+            _kernel32.GlobalUnlock(handle)
+    finally:
+        _user32.CloseClipboard()
+
+
+def _restore_clipboard_image(data: bytes) -> bool:
+    if sys.platform != "win32" or not _user32.OpenClipboard(0):
+        return False
+    try:
+        _user32.EmptyClipboard()
+        handle = _kernel32.GlobalAlloc(GMEM_MOVEABLE, len(data))
+        if not handle:
+            return False
+        ptr = _kernel32.GlobalLock(handle)
+        if not ptr:
+            return False
+        try:
+            ctypes.memmove(ptr, data, len(data))
+        finally:
+            _kernel32.GlobalUnlock(handle)
+        _user32.SetClipboardData(CF_DIB, handle)
+        return True
+    finally:
+        _user32.CloseClipboard()
+
+
 def send_to_window(
     hwnd: int,
     text: str,
@@ -79,11 +135,12 @@ def send_to_window(
     if not hwnd:
         raise TuiError("no target window captured (nothing was focused when recording started)")
 
+    image_data = _save_clipboard_image()
     previous = None
     try:
         previous = pyperclip.paste()
     except Exception:
-        pass
+        previous = None
 
     pyperclip.copy(text)
     activate_window(hwnd)
@@ -92,9 +149,11 @@ def send_to_window(
     time.sleep(settle_s)
     _enter()
 
-    if restore_clipboard and previous is not None:
-        time.sleep(settle_s)
-        try:
-            pyperclip.copy(previous)
-        except Exception:
-            pass
+    if restore_clipboard:
+        if image_data is not None:
+            _restore_clipboard_image(image_data)
+        elif previous:
+            try:
+                pyperclip.copy(previous)
+            except Exception:
+                pass
