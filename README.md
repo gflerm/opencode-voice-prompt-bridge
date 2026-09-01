@@ -1,7 +1,7 @@
 ---
 title: OpenCode Voice Prompt Bridge
 description: Push-to-talk Whisper dictation for OpenCode on Windows - local transcription, tray control, login autostart.
-status: active
+status: done
 priority: high
 startDate: "2026-08-28"
 tags: [voice, whisper, opencode, windows, python]
@@ -40,6 +40,9 @@ timeline:
     date: "2026-08-28"
     done: true
   - title: "Published to GitHub (MIT)"
+    date: "2026-08-28"
+    done: true
+  - title: "v0.1 complete - project closed (deferred ideas in BACKLOG)"
     date: "2026-08-28"
     done: true
 ---
@@ -135,6 +138,7 @@ the review window opens with the text instead - nothing is lost.
 | Cancel a review | **Esc** in the review window |
 | Skip learned corrections once | tap **F9** |
 | Toggle hotkey / OpenCode binding / quit | tray icon menu |
+| Restart the app (single-instance safe) | `scripts\restart_app.ps1` or the desktop "Voice Bridge (restart)" shortcut |
 | Manage glossary and corrections | `scripts\vocab_manager.py` |
 
 Configuration lives in `config.toml` (see `config.example.toml` for

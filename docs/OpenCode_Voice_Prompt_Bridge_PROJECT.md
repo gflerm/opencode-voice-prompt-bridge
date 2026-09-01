@@ -5,6 +5,15 @@
 **Platform:** Windows 11  
 **Primary language:** Python 3.12 recommended
 
+> **Status (2026-08-28): DONE.** v0.1 is built, tested (56 unit tests)
+> and published at github.com/gflerm/opencode-voice-prompt-bridge.
+> Shipped beyond this draft: native plugin delivery with restart-proof
+> event ids, single-instance guard, self-healing hotkey state, system
+> tray (hotkey + OpenCode-binding toggles), login autostart, English/
+> Afrikaans auto-detect on multilingual models, English-only medium.en
+> default. See README.md for the current user-facing documentation and
+> BACKLOG.md for what was deliberately deferred.
+
 ## Purpose
 
 Build a lightweight local voice-input layer for OpenCode CLI. Hold a configurable hotkey, speak, release, review/edit the transcript, and send the final prompt to OpenCode. No TTS is required.
